@@ -1,9 +1,12 @@
 import { trpc } from "@/lib/trpc";
+import { handleStaticDemoOperation, isStaticDemoMode } from "@/lib/staticDemo";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, TRPCClientError, type TRPCLink } from "@trpc/client";
+import { observable } from "@trpc/server/observable";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
+import type { AppRouter } from "../../server/routers";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
@@ -37,19 +40,37 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
-const trpcClient = trpc.createClient({
-  links: [
-    httpBatchLink({
-      url: "/api/trpc",
-      transformer: superjson,
-      fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
+const staticDemoLink: TRPCLink<AppRouter> = () => {
+  return ({ op }) =>
+    observable(observer => {
+      handleStaticDemoOperation(op.path, op.input)
+        .then(data => {
+          observer.next({ result: { data } });
+          observer.complete();
+        })
+        .catch(error => {
+          observer.error(error);
         });
-      },
-    }),
-  ],
+
+      return () => {};
+    });
+};
+
+const trpcClient = trpc.createClient({
+  links: isStaticDemoMode()
+    ? [staticDemoLink]
+    : [
+        httpBatchLink({
+          url: "/api/trpc",
+          transformer: superjson,
+          fetch(input, init) {
+            return globalThis.fetch(input, {
+              ...(init ?? {}),
+              credentials: "include",
+            });
+          },
+        }),
+      ],
 });
 
 createRoot(document.getElementById("root")!).render(

@@ -1,12 +1,24 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
+export const getAppBasePath = () => {
+  const base = import.meta.env.BASE_URL || "/";
+  if (base === "/" || base === "./") return "";
+  return base.replace(/\/$/, "");
+};
+
+export const getAppPath = (path: string = "/") => {
+  const base = getAppBasePath();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${normalizedPath}` || "/";
+};
+
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
 
   if (!oauthPortalUrl || !appId) {
-    return "/";
+    return getAppPath("/");
   }
 
   const redirectUri = `${window.location.origin}/api/oauth/callback`;

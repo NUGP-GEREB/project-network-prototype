@@ -159,6 +159,8 @@ const plugins = [
 ];
 
 export default defineConfig({
+  base:
+    process.env.GITHUB_PAGES === "true" ? "/project-network-prototype/" : "/",
   plugins,
   resolve: {
     alias: {

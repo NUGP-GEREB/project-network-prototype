@@ -3,6 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getLoginUrl } from "@/const";
+import {
+  isStaticDemoMode,
+  setStaticDemoAuthenticated,
+  staticDemoUser,
+} from "@/lib/staticDemo";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowRight,
@@ -63,6 +68,7 @@ export default function Home() {
   const [, navigate] = useLocation();
   const [email, setEmail] = useState("demo@fiocruz.br");
   const [password, setPassword] = useState("demo123");
+  const staticMode = isStaticDemoMode();
 
   const demoLogin = trpc.auth.demoLogin.useMutation({
     onSuccess: async data => {
@@ -82,6 +88,13 @@ export default function Home() {
 
   const handleDemoLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (staticMode) {
+      setStaticDemoAuthenticated(true);
+      utils.auth.me.setData(undefined, staticDemoUser as any);
+      navigate("/dashboard");
+      return;
+    }
+
     demoLogin.mutate({ email, password });
   };
 

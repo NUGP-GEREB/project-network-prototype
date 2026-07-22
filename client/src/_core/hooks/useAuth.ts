@@ -1,7 +1,13 @@
 import { getLoginUrl } from "@/const";
+import {
+  isStaticDemoAuthenticated,
+  isStaticDemoMode,
+  setStaticDemoAuthenticated,
+  staticDemoUser,
+} from "@/lib/staticDemo";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -12,8 +18,11 @@ export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
     options ?? {};
   const utils = trpc.useUtils();
+  const staticMode = isStaticDemoMode();
+  const [staticAuthVersion, setStaticAuthVersion] = useState(0);
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
+    enabled: !staticMode,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -25,6 +34,14 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    if (staticMode) {
+      setStaticDemoAuthenticated(false);
+      setStaticAuthVersion(version => version + 1);
+      utils.auth.me.setData(undefined, null);
+      window.location.href = getLoginUrl();
+      return;
+    }
+
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
@@ -39,20 +56,26 @@ export function useAuth(options?: UseAuthOptions) {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
     }
-  }, [logoutMutation, utils]);
+  }, [logoutMutation, staticMode, utils]);
 
   const state = useMemo(() => {
+    const staticUser =
+      staticMode && isStaticDemoAuthenticated() ? staticDemoUser : null;
+    const user = staticMode ? staticUser : meQuery.data ?? null;
+
     localStorage.setItem(
       "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
+      JSON.stringify(user)
     );
     return {
-      user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
+      user,
+      loading: staticMode ? false : meQuery.isLoading || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      isAuthenticated: Boolean(user),
     };
   }, [
+    staticMode,
+    staticAuthVersion,
     meQuery.data,
     meQuery.error,
     meQuery.isLoading,
@@ -78,7 +101,13 @@ export function useAuth(options?: UseAuthOptions) {
 
   return {
     ...state,
-    refresh: () => meQuery.refetch(),
+    refresh: () => {
+      if (staticMode) {
+        setStaticAuthVersion(version => version + 1);
+        return Promise.resolve({ data: state.user } as any);
+      }
+      return meQuery.refetch();
+    },
     logout,
   };
 }
